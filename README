@@ -1,0 +1,6 @@
+#Puppet Enterprise Fixtures
+
+This repository is a collection of fact dumps from various versions of Puppet
+Enterprise.  It allows an easy way to iterate over sets of facts from supported
+platforms within rspec-puppet to ensure your module works appropriately on all
+platforms.
