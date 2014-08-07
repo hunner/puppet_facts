@@ -1,4 +1,7 @@
 require 'json'
+require 'puppet'
+# From puppet
+require 'semver'
 
 module PuppetFacts
 
@@ -18,19 +21,18 @@ module PuppetFacts
   def on_pe_supported_platforms(targets=nil)
     targets = Array(targets) if targets
 
-    # This should filter based on set_pe_supported_platforms
+    # TODO This should filter based on set_pe_supported_platforms
     facts = PuppetFacts.pe_platform_facts
     sup_facts = Hash.new
-    #TODO how do we compare against this?
-    #  "name": "pe",
-    #  "version_requirement": "3.2.x"
-    #  "version_requirement": ">= 3.2.0 < 3.4.0"
     facts.each do |pe_ver,platforms|
-      sup_facts[pe_ver] = platforms.select do |platform, facts|
-        if targets
-          PuppetFacts.meta_supported_platforms.include?(platform) && targets.include?(platform)
-        else
-          PuppetFacts.meta_supported_platforms.include?(platform)
+      pe_semver = "#{pe_ver.sub(/^PE/,'')}.0"
+      if SemVer[PuppetFacts.get_pe_requirement] === SemVer.new(pe_semver)
+        sup_facts[pe_ver] = platforms.select do |platform, facts|
+          if targets
+            PuppetFacts.meta_supported_platforms.include?(platform) && targets.include?(platform)
+          else
+            PuppetFacts.meta_supported_platforms.include?(platform)
+          end
         end
       end
     end
@@ -42,19 +44,18 @@ module PuppetFacts
   def on_pe_unsupported_platforms(targets=nil)
     targets = Array(targets) if targets
 
-    # This should filter based on set_pe_supported_platforms
+    # TODO This should filter based on set_pe_supported_platforms
     facts = PuppetFacts.pe_platform_facts
     sup_facts = Hash.new
-    #TODO how do we compare against this?
-    #  "name": "pe",
-    #  "version_requirement": "3.2.x"
-    #  "version_requirement": ">= 3.2.0 < 3.4.0"
     facts.each do |pe_ver,platforms|
-      sup_facts[pe_ver] = platforms.select do |platform, facts|
-        if targets
-          ! PuppetFacts.meta_supported_platforms.include?(platform) && ! targets.include?(platform)
-        else
-          ! PuppetFacts.meta_supported_platforms.include?(platform)
+      pe_semver = "#{pe_ver.sub(/^PE/,'')}.0"
+      if SemVer[PuppetFacts.get_pe_requirement] === SemVer.new(pe_semver)
+        sup_facts[pe_ver] = platforms.select do |platform, facts|
+          if targets
+            ! PuppetFacts.meta_supported_platforms.include?(platform) && ! targets.include?(platform)
+          else
+            ! PuppetFacts.meta_supported_platforms.include?(platform)
+          end
         end
       end
     end
@@ -74,15 +75,20 @@ module PuppetFacts
   def self.pe_versions
     @pe_versions ||= get_pe_versions
   end
+
+  # @api private
   def self.get_pe_versions
     @pe_dirs.collect do |dir|
       File.basename(dir)
     end
   end
 
+  # @api private
   def self.pe_platforms
     @pe_platforms ||= get_pe_platforms
   end
+
+  # @api private
   def self.get_pe_platforms
     @pe_dirs.inject({}) do |memo,pe_dir|
       pe_version = File.basename(pe_dir)
@@ -96,18 +102,24 @@ module PuppetFacts
     end
   end
 
+  # @api private
   def self.pe_facts_paths
     @pe_facts_paths ||= get_pe_facts_paths
   end
+
+  # @api private
   def self.get_pe_facts_paths
     @pe_dirs.collect do |dir|
       Dir[File.join(dir,"*")]
     end.flatten
   end
 
+  # @api private
   def self.pe_platform_facts
     @pe_platform_facts ||= get_pe_platform_facts
   end
+
+  # @api private
   def self.get_pe_platform_facts
     pe_facts_paths.inject({}) do |memo,file|
       pe_platform = File.basename(file.gsub(/\.facts/, ''))
@@ -122,10 +134,12 @@ module PuppetFacts
     end
   end
 
+  # @api private
   def self.meta_supported_platforms
     @meta_supported_platforms ||= get_meta_supported_platforms
   end
 
+  # @api private
   def self.meta_to_facts(input)
     meta_to_facts = {
       'RedHat' => 'redhat',
@@ -148,12 +162,10 @@ module PuppetFacts
     end
   end
 
+  # @api private
   def self.get_meta_supported_platforms
-    if ! File.file?('metadata.json')
-      fail StandardError, "Can't find metadata.json... dunno why"
-    end
-    metadata = JSON.parse(File.read('metadata.json'))
-    if metadata.nil? or metadata['operatingsystem_support'].nil?
+    metadata = get_metadata
+    if metadata['operatingsystem_support'].nil?
       fail StandardError, "Unknown operatingsystem support"
     end
     os_sup = metadata['operatingsystem_support']
@@ -169,5 +181,32 @@ module PuppetFacts
         ]
       end
     end.flatten
+  end
+
+  # @api private
+  def self.get_metadata
+    if ! File.file?('metadata.json')
+      fail StandardError, "Can't find metadata.json... dunno why"
+    end
+    metadata = JSON.parse(File.read('metadata.json'))
+    if metadata.nil?
+      fail StandardError, "Metadata is empty"
+    end
+    metadata
+  end
+
+  # @api private
+  def self.get_pe_requirement
+    metadata = get_metadata
+    if metadata['requirements'].nil?
+      fail StandardError, 'No requirements in metadata'
+    end
+    pe_requirement = metadata['requirements'].select do |x|
+      x['name'] == 'pe'
+    end
+    if pe_requirement.empty?
+      fail StandardError, 'No PE requirement found in metadata'
+    end
+    pe_requirement.first['version_requirement']
   end
 end
