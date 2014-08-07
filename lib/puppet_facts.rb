@@ -37,6 +37,30 @@ module PuppetFacts
     sup_facts
   end
 
+  # We need the inverse, this is kind of ugly. I don't want to cram it into the
+  # other method however.
+  def on_pe_unsupported_platforms(targets=nil)
+    targets = Array(targets) if targets
+
+    # This should filter based on set_pe_supported_platforms
+    facts = PuppetFacts.pe_platform_facts
+    sup_facts = Hash.new
+    #TODO how do we compare against this?
+    #  "name": "pe",
+    #  "version_requirement": "3.2.x"
+    #  "version_requirement": ">= 3.2.0 < 3.4.0"
+    facts.each do |pe_ver,platforms|
+      sup_facts[pe_ver] = platforms.select do |platform, facts|
+        if targets
+          ! PuppetFacts.meta_supported_platforms.include?(platform) && ! targets.include?(platform)
+        else
+          ! PuppetFacts.meta_supported_platforms.include?(platform)
+        end
+      end
+    end
+    sup_facts
+  end
+
   #private
 
   @proj_root = File.expand_path(File.join(File.dirname(__FILE__), '..'))
