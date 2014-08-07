@@ -15,7 +15,9 @@ module PuppetFacts
     PuppetFacts.pe_platforms[pe_version]
   end
 
-  def on_pe_supported_platforms
+  def on_pe_supported_platforms(targets=nil)
+    targets = Array(targets) if targets
+
     # This should filter based on set_pe_supported_platforms
     facts = PuppetFacts.pe_platform_facts
     sup_facts = Hash.new
@@ -25,7 +27,11 @@ module PuppetFacts
     #  "version_requirement": ">= 3.2.0 < 3.4.0"
     facts.each do |pe_ver,platforms|
       sup_facts[pe_ver] = platforms.select do |platform, facts|
-        PuppetFacts.meta_supported_platforms.include?(platform)
+        if targets
+          PuppetFacts.meta_supported_platforms.include?(platform) && targets.include?(platform)
+        else
+          PuppetFacts.meta_supported_platforms.include?(platform)
+        end
       end
     end
     sup_facts
